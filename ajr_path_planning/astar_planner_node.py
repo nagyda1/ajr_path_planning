@@ -1,3 +1,6 @@
+import math
+import time
+
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid, Path
@@ -73,14 +76,20 @@ class AstarPlannerNode(Node):
             f"A* keresés indítása: start={start_grid}, cél={goal_grid}"
         )
 
+        start_time = time.perf_counter()
+
         path_cells = astar_search(
             self.grid,
             start_grid,
             goal_grid,
         )
 
+        elapsed_time_ms = (time.perf_counter() - start_time) * 1000.0
+
         if path_cells is None:
-            self.get_logger().warn("Nem található érvényes útvonal.")
+            self.get_logger().warn(
+                f"Nem található érvényes útvonal. Futásidő: {elapsed_time_ms:.3f} ms."
+            )
             return
 
         world_points = [
@@ -88,12 +97,33 @@ class AstarPlannerNode(Node):
             for gx, gy in path_cells
         ]
 
+        path_length = self.calculate_path_length(world_points)
+
         self.publish_path(world_points)
         self.publish_markers(world_points)
 
         self.get_logger().info(
-            f"Útvonal megtalálva: {len(world_points)} pont."
+            f"Útvonal megtalálva: {len(world_points)} pont, "
+            f"hossz: {path_length:.3f} m, "
+            f"futásidő: {elapsed_time_ms:.3f} ms."
         )
+
+    def calculate_path_length(self, world_points):
+        if len(world_points) < 2:
+            return 0.0
+
+        path_length = 0.0
+
+        for index in range(1, len(world_points)):
+            previous_point = world_points[index - 1]
+            current_point = world_points[index]
+
+            path_length += math.dist(
+                previous_point,
+                current_point,
+            )
+
+        return path_length
 
     def publish_path(self, world_points):
         path_msg = Path()
