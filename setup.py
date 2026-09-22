@@ -1,3 +1,6 @@
+import os
+from glob import glob
+
 from setuptools import find_packages, setup
 
 package_name = "ajr_path_planning"
@@ -7,15 +10,28 @@ setup(
     version="0.0.1",
     packages=find_packages(exclude=["test"]),
     data_files=[
-        ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
-        ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/planner.launch.py"]),
+        (
+            "share/ament_index/resource_index/packages",
+            ["resource/" + package_name],
+        ),
+        (
+            "share/" + package_name,
+            ["package.xml"],
+        ),
+        (
+            os.path.join("share", package_name, "launch"),
+            glob("launch/*.launch.py"),
+        ),
+        (
+            os.path.join("share", package_name, "config"),
+            glob("config/*.rviz"),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="nagyda1",
-    maintainer_email="nagyda1@example.com",
-    description="A* es RRT alapu utvonaltervezo es vizualizacio ROS 2 Humble alatt - AJR nagy feleves",
+    maintainer="Nagy Dávid",
+    maintainer_email="nagy.david1@ga.sze.hu",
+    description="A* és RRT alapú útvonaltervező és vizualizáció ROS 2 Humble alatt",
     license="MIT",
     tests_require=["pytest"],
     entry_points={
