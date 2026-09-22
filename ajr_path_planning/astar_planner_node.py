@@ -8,6 +8,7 @@ from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker, MarkerArray
 
 from ajr_path_planning.planning_utils import GridMap, astar_search
+from ajr_path_planning.metrics_logger import write_result
 
 START_WORLD = (0.75, 0.75)
 
@@ -87,6 +88,20 @@ class AstarPlannerNode(Node):
         elapsed_time_ms = (time.perf_counter() - start_time) * 1000.0
 
         if path_cells is None:
+            write_result(
+                algorithm="A*",
+                start=START_WORLD,
+                goal=(
+                    msg.pose.position.x,
+                    msg.pose.position.y,
+                ),
+                success=False,
+                path_length_m=None,
+                elapsed_time_ms=elapsed_time_ms,
+                point_count=0,
+                tree_node_count=0,
+            )
+
             self.get_logger().warn(
                 f"Nem található érvényes útvonal. Futásidő: {elapsed_time_ms:.3f} ms."
             )
@@ -98,6 +113,19 @@ class AstarPlannerNode(Node):
         ]
 
         path_length = self.calculate_path_length(world_points)
+        write_result(
+            algorithm="A*",
+            start=START_WORLD,
+            goal=(
+                msg.pose.position.x,
+                msg.pose.position.y,
+            ),
+            success=True,
+            path_length_m=path_length,
+            elapsed_time_ms=elapsed_time_ms,
+            point_count=len(world_points),
+            tree_node_count=0,
+        )
 
         self.publish_path(world_points)
         self.publish_markers(world_points)

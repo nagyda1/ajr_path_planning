@@ -8,6 +8,7 @@ from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker, MarkerArray
 
 from ajr_path_planning.planning_utils import GridMap, TreeNode, rrt_search
+from ajr_path_planning.metrics_logger import write_result
 
 START_WORLD = (0.75, 0.75)
 
@@ -97,12 +98,23 @@ class RrtPlannerNode(Node):
         self.publish_tree(tree_nodes)
 
         if path_nodes is None:
-            self.get_logger().warn(
-                f"Nem található érvényes RRT útvonal. "
-                f"Futásidő: {elapsed_time_ms:.3f} ms, "
-                f"fa csomópontjai: {len(tree_nodes)}."
-            )
-            return
+    write_result(
+        algorithm="RRT",
+        start=START_WORLD,
+        goal=goal_world,
+        success=False,
+        path_length_m=None,
+        elapsed_time_ms=elapsed_time_ms,
+        point_count=0,
+        tree_node_count=len(tree_nodes),
+    )
+
+    self.get_logger().warn(
+        f"Nem található érvényes RRT útvonal. "
+        f"Futásidő: {elapsed_time_ms:.3f} ms, "
+        f"fa csomópontjai: {len(tree_nodes)}."
+    )
+    return
 
         world_points = [
             (node.x, node.y)
@@ -110,6 +122,16 @@ class RrtPlannerNode(Node):
         ]
 
         path_length = self.calculate_path_length(world_points)
+        write_result(
+    algorithm="RRT",
+    start=START_WORLD,
+    goal=goal_world,
+    success=True,
+    path_length_m=path_length,
+    elapsed_time_ms=elapsed_time_ms,
+    point_count=len(world_points),
+    tree_node_count=len(tree_nodes),
+)
 
         self.publish_path(world_points)
         self.publish_path_markers(world_points)
