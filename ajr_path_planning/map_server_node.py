@@ -1,7 +1,8 @@
 import rclpy
 from rclpy.node import Node
+from geometry_msgs.msg import Point, Pose, PoseArray, Quaternion
 from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import Pose, Point, Quaternion
+
 
 WIDTH = 20
 HEIGHT = 20
@@ -12,8 +13,22 @@ class MapServerNode(Node):
     def __init__(self):
         super().__init__("map_server_node")
 
-        self.grid_data = self.build_static_grid()
-        self.publisher = self.create_publisher(OccupancyGrid, "/map", 10)
+        self.base_grid_data = self.build_static_grid()
+        self.grid_data = list(self.base_grid_data)
+
+        self.publisher = self.create_publisher(
+            OccupancyGrid,
+            "/map",
+            10,
+        )
+
+        self.create_subscription(
+            PoseArray,
+            "/dynamic_obstacles",
+            self.dynamic_obstacles_callback,
+            10,
+        )
+
         self.timer = self.create_timer(1.0, self.publish_map)
 
         self.get_logger().info(
@@ -43,6 +58,29 @@ class MapServerNode(Node):
             set_cell(x, 15, 100)
 
         return grid
+
+    def dynamic_obstacles_callback(self, msg: PoseArray):
+        updated_grid = list(self.base_grid_data)
+
+        for pose in msg.poses:
+            cell_x = int(pose.position.x / RESOLUTION)
+            cell_y = int(pose.position.y / RESOLUTION)
+
+            for offset_x in range(-1, 2):
+                for offset_y in range(-1, 2):
+                    x = cell_x + offset_x
+                    y = cell_y + offset_y
+
+                    if 0 <= x < WIDTH and 0 <= y < HEIGHT:
+                        updated_grid[y * WIDTH + x] = 100
+
+        if updated_grid != self.grid_data:
+            self.grid_data = updated_grid
+            self.publish_map()
+
+            self.get_logger().info(
+                "A térkép dinamikus akadály miatt frissült."
+            )
 
     def publish_map(self):
         msg = OccupancyGrid()
