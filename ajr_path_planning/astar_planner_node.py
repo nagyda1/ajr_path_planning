@@ -18,6 +18,8 @@ class AstarPlannerNode(Node):
         super().__init__("astar_planner_node")
 
         self.grid = None
+        self.active_goal = None
+        self.current_path_cells = []
 
         self.create_subscription(
             OccupancyGrid,
@@ -61,21 +63,49 @@ class AstarPlannerNode(Node):
             data=list(msg.data),
         )
 
+        if self.active_goal is None:
+            return
+
+        if not self.current_path_cells:
+            return
+
+        if self.path_is_blocked():
+            self.get_logger().info(
+                "A* útvonal blokkolódott dinamikus akadály miatt, "
+                "újratervezés indul."
+            )
+            self.plan_path(replanning=True)
+
     def goal_callback(self, msg: PoseStamped):
         if self.grid is None:
             self.get_logger().warn("Még nem érkezett /map üzenet.")
             return
 
-        start_grid = self.grid.world_to_grid(*START_WORLD)
-
-        goal_grid = self.grid.world_to_grid(
+        self.active_goal = (
             msg.pose.position.x,
             msg.pose.position.y,
         )
 
-        self.get_logger().info(
-            f"A* keresés indítása: start={start_grid}, cél={goal_grid}"
+        self.plan_path(replanning=False)
+
+    def path_is_blocked(self):
+        return any(
+            self.grid.is_occupied(gx, gy)
+            for gx, gy in self.current_path_cells
         )
+
+    def plan_path(self, replanning):
+        start_grid = self.grid.world_to_grid(*START_WORLD)
+        goal_grid = self.grid.world_to_grid(*self.active_goal)
+
+        if replanning:
+            self.get_logger().info(
+                f"A* újratervezés indítása: start={start_grid}, cél={goal_grid}"
+            )
+        else:
+            self.get_logger().info(
+                f"A* keresés indítása: start={start_grid}, cél={goal_grid}"
+            )
 
         start_time = time.perf_counter()
 
@@ -91,10 +121,7 @@ class AstarPlannerNode(Node):
             write_result(
                 algorithm="A*",
                 start=START_WORLD,
-                goal=(
-                    msg.pose.position.x,
-                    msg.pose.position.y,
-                ),
+                goal=self.active_goal,
                 success=False,
                 path_length_m=None,
                 elapsed_time_ms=elapsed_time_ms,
@@ -102,10 +129,20 @@ class AstarPlannerNode(Node):
                 tree_node_count=0,
             )
 
-            self.get_logger().warn(
-                f"Nem található érvényes útvonal. Futásidő: {elapsed_time_ms:.3f} ms."
-            )
+            if replanning:
+                self.get_logger().warn(
+                    "Az A* újratervezés nem talált érvényes útvonalat. "
+                    f"Futásidő: {elapsed_time_ms:.3f} ms."
+                )
+            else:
+                self.get_logger().warn(
+                    "Nem található érvényes A* útvonal. "
+                    f"Futásidő: {elapsed_time_ms:.3f} ms."
+                )
+
             return
+
+        self.current_path_cells = path_cells
 
         world_points = [
             self.grid.grid_to_world(gx, gy)
@@ -113,13 +150,11 @@ class AstarPlannerNode(Node):
         ]
 
         path_length = self.calculate_path_length(world_points)
+
         write_result(
             algorithm="A*",
             start=START_WORLD,
-            goal=(
-                msg.pose.position.x,
-                msg.pose.position.y,
-            ),
+            goal=self.active_goal,
             success=True,
             path_length_m=path_length,
             elapsed_time_ms=elapsed_time_ms,
@@ -130,11 +165,18 @@ class AstarPlannerNode(Node):
         self.publish_path(world_points)
         self.publish_markers(world_points)
 
-        self.get_logger().info(
-            f"Útvonal megtalálva: {len(world_points)} pont, "
-            f"hossz: {path_length:.3f} m, "
-            f"futásidő: {elapsed_time_ms:.3f} ms."
-        )
+        if replanning:
+            self.get_logger().info(
+                f"A* újratervezés sikeres: {len(world_points)} pont, "
+                f"hossz: {path_length:.3f} m, "
+                f"futásidő: {elapsed_time_ms:.3f} ms."
+            )
+        else:
+            self.get_logger().info(
+                f"A* útvonal megtalálva: {len(world_points)} pont, "
+                f"hossz: {path_length:.3f} m, "
+                f"futásidő: {elapsed_time_ms:.3f} ms."
+            )
 
     def calculate_path_length(self, world_points):
         if len(world_points) < 2:

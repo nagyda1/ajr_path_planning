@@ -18,6 +18,8 @@ class RrtPlannerNode(Node):
         super().__init__("rrt_planner_node")
 
         self.grid = None
+        self.active_goal = None
+        self.current_path_points = []
 
         self.create_subscription(
             OccupancyGrid,
@@ -61,29 +63,65 @@ class RrtPlannerNode(Node):
             data=list(msg.data),
         )
 
+        if self.active_goal is None:
+            return
+
+        if len(self.current_path_points) < 2:
+            return
+
+        if self.path_is_blocked():
+            self.get_logger().info(
+                "RRT útvonal blokkolódott dinamikus akadály miatt, "
+                "újratervezés indul."
+            )
+            self.plan_path(replanning=True)
+
     def goal_callback(self, msg: PoseStamped):
         if self.grid is None:
             self.get_logger().warn("Még nem érkezett /map üzenet.")
             return
 
-        goal_world = (
+        self.active_goal = (
             msg.pose.position.x,
             msg.pose.position.y,
         )
 
+        self.plan_path(replanning=False)
+
+    def path_is_blocked(self):
+        for index in range(1, len(self.current_path_points)):
+            start_point = self.current_path_points[index - 1]
+            end_point = self.current_path_points[index]
+
+            if not self.grid.segment_is_free(
+                start_point,
+                end_point,
+            ):
+                return True
+
+        return False
+
+    def plan_path(self, replanning):
         start_node = TreeNode(
             x=START_WORLD[0],
             y=START_WORLD[1],
         )
 
         goal_node = TreeNode(
-            x=goal_world[0],
-            y=goal_world[1],
+            x=self.active_goal[0],
+            y=self.active_goal[1],
         )
 
-        self.get_logger().info(
-            f"RRT keresés indítása: start={START_WORLD}, cél={goal_world}"
-        )
+        if replanning:
+            self.get_logger().info(
+                f"RRT újratervezés indítása: start={START_WORLD}, "
+                f"cél={self.active_goal}"
+            )
+        else:
+            self.get_logger().info(
+                f"RRT keresés indítása: start={START_WORLD}, "
+                f"cél={self.active_goal}"
+            )
 
         start_time = time.perf_counter()
 
@@ -101,7 +139,7 @@ class RrtPlannerNode(Node):
             write_result(
                 algorithm="RRT",
                 start=START_WORLD,
-                goal=goal_world,
+                goal=self.active_goal,
                 success=False,
                 path_length_m=None,
                 elapsed_time_ms=elapsed_time_ms,
@@ -109,11 +147,19 @@ class RrtPlannerNode(Node):
                 tree_node_count=len(tree_nodes),
             )
 
-            self.get_logger().warn(
-                f"Nem található érvényes RRT útvonal. "
-                f"Futásidő: {elapsed_time_ms:.3f} ms, "
-                f"fa csomópontjai: {len(tree_nodes)}."
-            )
+            if replanning:
+                self.get_logger().warn(
+                    "Az RRT újratervezés nem talált érvényes útvonalat. "
+                    f"Futásidő: {elapsed_time_ms:.3f} ms, "
+                    f"fa csomópontjai: {len(tree_nodes)}."
+                )
+            else:
+                self.get_logger().warn(
+                    "Nem található érvényes RRT útvonal. "
+                    f"Futásidő: {elapsed_time_ms:.3f} ms, "
+                    f"fa csomópontjai: {len(tree_nodes)}."
+                )
+
             return
 
         world_points = [
@@ -121,12 +167,14 @@ class RrtPlannerNode(Node):
             for node in path_nodes
         ]
 
+        self.current_path_points = world_points
+
         path_length = self.calculate_path_length(world_points)
 
         write_result(
             algorithm="RRT",
             start=START_WORLD,
-            goal=goal_world,
+            goal=self.active_goal,
             success=True,
             path_length_m=path_length,
             elapsed_time_ms=elapsed_time_ms,
@@ -137,12 +185,20 @@ class RrtPlannerNode(Node):
         self.publish_path(world_points)
         self.publish_path_markers(world_points)
 
-        self.get_logger().info(
-            f"RRT útvonal megtalálva: {len(world_points)} pont, "
-            f"hossz: {path_length:.3f} m, "
-            f"futásidő: {elapsed_time_ms:.3f} ms, "
-            f"fa csomópontjai: {len(tree_nodes)}."
-        )
+        if replanning:
+            self.get_logger().info(
+                f"RRT újratervezés sikeres: {len(world_points)} pont, "
+                f"hossz: {path_length:.3f} m, "
+                f"futásidő: {elapsed_time_ms:.3f} ms, "
+                f"fa csomópontjai: {len(tree_nodes)}."
+            )
+        else:
+            self.get_logger().info(
+                f"RRT útvonal megtalálva: {len(world_points)} pont, "
+                f"hossz: {path_length:.3f} m, "
+                f"futásidő: {elapsed_time_ms:.3f} ms, "
+                f"fa csomópontjai: {len(tree_nodes)}."
+            )
 
     def calculate_path_length(self, world_points):
         if len(world_points) < 2:
@@ -278,7 +334,9 @@ class RrtPlannerNode(Node):
         marker_array.markers.append(path_marker)
         marker_array.markers.append(start_marker)
         marker_array.markers.append(goal_marker)
+
         self.marker_publisher.publish(marker_array)
+
 
 def main(args=None):
     rclpy.init(args=args)
