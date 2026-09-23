@@ -135,7 +135,7 @@ class RrtPlannerNode(Node):
         )
 
         self.publish_path(world_points)
-        # self.publish_path_markers(world_points)
+        self.publish_path_markers(world_points)
 
         self.get_logger().info(
             f"RRT útvonal megtalálva: {len(world_points)} pont, "
@@ -182,6 +182,103 @@ class RrtPlannerNode(Node):
         tree_marker.ns = "rrt_tree"
         tree_marker.id = 0
         tree_marker.type = Marker.LINE_LIST
+        tree_marker.action = Marker.ADD
+        tree_marker.scale.x = 0.015
+        tree_marker.color.r = 0.0
+        tree_marker.color.g = 0.7
+        tree_marker.color.b = 1.0
+        tree_marker.color.a = 0.5
+
+        for node in tree_nodes:
+            if node.parent is not None:
+                tree_marker.points.append(
+                    Point(
+                        x=node.parent.x,
+                        y=node.parent.y,
+                        z=0.0,
+                    )
+                )
+                tree_marker.points.append(
+                    Point(
+                        x=node.x,
+                        y=node.y,
+                        z=0.0,
+                    )
+                )
+
+        marker_array.markers.append(tree_marker)
+        self.marker_publisher.publish(marker_array)
+
+    def publish_path_markers(self, world_points):
+        if not world_points:
+            return
+
+        marker_array = MarkerArray()
+        timestamp = self.get_clock().now().to_msg()
+
+        path_marker = Marker()
+        path_marker.header.frame_id = "map"
+        path_marker.header.stamp = timestamp
+        path_marker.ns = "rrt_path"
+        path_marker.id = 1
+        path_marker.type = Marker.LINE_STRIP
+        path_marker.action = Marker.ADD
+        path_marker.scale.x = 0.07
+        path_marker.color.r = 1.0
+        path_marker.color.g = 0.5
+        path_marker.color.b = 0.0
+        path_marker.color.a = 1.0
+        path_marker.points = [
+            Point(x=wx, y=wy, z=0.02)
+            for wx, wy in world_points
+        ]
+
+        start_marker = Marker()
+        start_marker.header.frame_id = "map"
+        start_marker.header.stamp = timestamp
+        start_marker.ns = "rrt_start"
+        start_marker.id = 2
+        start_marker.type = Marker.SPHERE
+        start_marker.action = Marker.ADD
+        start_marker.pose.position = Point(
+            x=world_points[0][0],
+            y=world_points[0][1],
+            z=0.0,
+        )
+        start_marker.pose.orientation.w = 1.0
+        start_marker.scale.x = 0.2
+        start_marker.scale.y = 0.2
+        start_marker.scale.z = 0.2
+        start_marker.color.r = 0.0
+        start_marker.color.g = 0.0
+        start_marker.color.b = 1.0
+        start_marker.color.a = 1.0
+
+        goal_marker = Marker()
+        goal_marker.header.frame_id = "map"
+        goal_marker.header.stamp = timestamp
+        goal_marker.ns = "rrt_goal"
+        goal_marker.id = 3
+        goal_marker.type = Marker.SPHERE
+        goal_marker.action = Marker.ADD
+        goal_marker.pose.position = Point(
+            x=world_points[-1][0],
+            y=world_points[-1][1],
+            z=0.0,
+        )
+        goal_marker.pose.orientation.w = 1.0
+        goal_marker.scale.x = 0.2
+        goal_marker.scale.y = 0.2
+        goal_marker.scale.z = 0.2
+        goal_marker.color.r = 1.0
+        goal_marker.color.g = 0.0
+        goal_marker.color.b = 0.0
+        goal_marker.color.a = 1.0
+
+        marker_array.markers.append(path_marker)
+        marker_array.markers.append(start_marker)
+        marker_array.markers.append(goal_marker)
+        self.marker_publisher.publish(marker_array)
 
 def main(args=None):
     rclpy.init(args=args)
