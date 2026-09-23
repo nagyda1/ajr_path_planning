@@ -1,0 +1,9 @@
+algoritmus,meresek_szama,sikeres_meresek_szama,sikeressegi_arany_szazalek,mutato,atlag,median,szoras,minimum,maximum
+A*,12,12,100.0,Útvonalhossz (m),8.412,8.811,2.698,2.914,13.485
+A*,12,12,100.0,Futásidő (ms),1.225,1.267,0.642,0.303,2.319
+A*,12,12,100.0,Útvonalpontok száma,16.167,17.500,4.428,6.000,23.000
+A*,12,12,100.0,Fa csomópontok száma,0.000,0.000,0.000,0.000,0.000
+RRT,12,12,100.0,Útvonalhossz (m),11.375,10.622,4.693,2.820,20.320
+RRT,12,12,100.0,Futásidő (ms),5.885,4.110,6.034,0.228,20.917
+RRT,12,12,100.0,Útvonalpontok száma,24.417,23.000,9.462,7.000,42.000
+RRT,12,12,100.0,Fa csomópontok száma,116.167,106.500,82.497,15.000,287.000
